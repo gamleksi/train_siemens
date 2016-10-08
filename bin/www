@@ -1,0 +1,398 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+var app = require('../app');
+var debug = require('debug')('aleksi:server');
+var http = require('http');
+
+/**
+ * Get port from environment and store in Express.
+ */
+
+var port = normalizePort(process.env.PORT || '3000');
+app.set('port', port);
+
+/**
+ * Create HTTP server.
+ */
+
+var server = http.createServer(app);
+
+/**
+ * Create Socket.io.
+ */
+
+var io = require('socket.io')(server);
+
+/**
+ * Listen on provided port, on all network interfaces.
+ */
+
+server.listen(port);
+server.on('error', onError);
+server.on('listening', onListening);
+
+/**DATA
+ * */
+
+//DYNAMIC
+
+var demoData = {};
+
+var Demo = function (name, connections, socket) {
+    demoData[name] = this;
+    this.connections = connections;
+    this.demoIsGoing = false;
+    this.socketArray = [socket];
+    this.addSocket = function(socket) {
+        this.socketArray.push(socket);
+    };
+    this.demoName = name;
+    this.locationAtTheMoment = 0;
+    this.nextLocation = function () {
+        this.locationAtTheMoment = this.locationAtTheMoment + 1;
+    };
+    this.broadcast = function(message, socket, data){
+        if(data !== undefined) {
+            for(var i in this.socketArray) {
+                if(this.socketArray[i] !== undefined && socket !== this.socketArray[i]) {
+                    this.socketArray[i].emit(message, data);
+                }
+            }
+        } else {
+            for(var i in this.socketArray) {
+                if(this.socketArray[i] !== undefined && socket !== this.socketArray[i]) {
+                    this.socketArray[i].emit(message);
+                }
+            }
+        }
+    };
+    this.removeSocket = function(sckt) {
+        console.log(this.socketArray.length);
+        for(var i in this.socketArray) {
+          if(sckt === this.socketArray[i]) {
+              this.socketArray[i] = this.socketArray[this.socketArray.size -1];
+              this.socketArray.pop();
+          }
+      }
+        console.log(this.socketArray.length);
+        if(this.socketArray.length < 1) {
+            delete demoData[this.demoName];
+            console.log('Demo removed');
+        }
+    };
+};
+
+/**Static for demo*/
+
+var amountOfSeats = 270;
+var locations = ["HELSINKI", "HÄMEENLINNA", "TAMPERE", "KOKKOLA", "OULU"];
+var locationMap = {HELSINKI: 0, HÄMEENLINNNA: 1, TAMPERE: 2, KOKKOLA: 3, OULU: 4};
+
+var names = [
+    "Minttu",
+    "Mira",
+    "Mirella",
+    "Mirja",
+    "Mirjami",
+    "Mirka",
+    "Mirkka",
+    "Nelli",
+    "Netta",
+    "Jari",
+    "Jarkko",
+    "Jarmo",
+    "Jarno",
+    "Jasper",
+    "Jere"
+];
+
+var descriptions = [
+    "Jatkaa laiturille 3",
+    "Jatkaa laiturille 1",
+    "Jatkaa laiturille 2",
+    "Tilasi päivän lehden",
+    "Tilasi aamupalan",
+    "Tarvitsee nostoapua",
+    "Opiskelija-alennus",
+];
+
+var notifications = [{description: "Kavhitilaus vaunu 3 paikka 15"}, {description: "Valot eivät pala vaunussa 2"}, {description: "Juna saapuu seuraavalle asemalle 10 minuuttia myöhässä"}, {description: "Korkea lämpötilä vaunussa 4"}];
+
+var timeoutArray = [20000, 50000, 30000, 60000, 80000];
+
+function generateData() {
+    var seatMaintenance = {};
+    var connections = [];
+    for (var locationIndex in locations) {
+        var newConnection = {};
+        for (var seatId = 1; seatId <= amountOfSeats; seatId++) {
+            var isNotDefined = seatMaintenance.seatId === undefined;
+            if (isNotDefined || locationIndex <= locations.valueOf(seatMaintenance[seatId].end)) {
+                var randomIndex = Math.floor((Math.random() * (6)));
+                newConnection[seatId] = {id: seatId};
+                if (locationIndex < randomIndex && randomIndex < locations.length) {
+                    var newClient = {start: locations[locationIndex], end: locations[randomIndex]};
+
+                    var randomName = Math.floor((Math.random() * (250)));
+                    if (randomName < names.length) {
+                        var randomDescription = Math.floor((Math.random() * (descriptions.length)));
+                        newConnection[seatId].name = names[randomName];
+                        newConnection[seatId].description = descriptions[randomDescription];
+                    }
+                    /*
+                     Päivitetään aikaisempaan tietoon milloin tulee next.
+                     */
+                    if (isNotDefined) {
+                        if (locationIndex != 0) {
+                            connections[0][seatId].next = locations[locationIndex];
+                        }
+                    } else if (seatMaintenance[seatId].start !== undefined) {
+                        connections[locationMap[seatMaintenance[seatId].start]][seatId][next] = locations[locationIndex];
+                    }
+                    newConnection[seatId].start = locations[locationIndex];
+                    newConnection[seatId].end = locations[randomIndex];
+                    seatMaintenance[seatId] = {start: locations[locationIndex], end: locations[randomIndex]};
+                }
+
+            }
+
+        }
+        connections.push(newConnection)
+    }
+    return connections;
+}
+
+// Demo example
+
+var testDemo = new Demo("testi", generateData(), undefined)
+
+
+
+/**
+ * SOCKET.IO
+ * */
+
+io.on('connection', function (socket) {
+    var testi = 1;
+    var demo = undefined;
+
+
+    console.log('client ' + testi + 'has connected...!');
+    testi = testi + 1;
+
+    socket.on('newDemo', function (name) {
+        console.log('newDemo');
+        if (demoData.hasOwnProperty(name)) {
+            nameIsInUse();
+        } else {
+            createDemo(name)
+        }
+    });
+
+    function nameIsInUse() {
+        socket.emit('nameIsInUse');
+    }
+
+    function createDemo(name) {
+        console.log('createDemo');
+        var connections = generateData();
+        demo = new Demo(name, connections, socket);
+        console.log('1');
+        console.log(demo.locationAtTheMoment);
+        socket.emit('locationIndex', demo.locationAtTheMoment);
+        socket.emit('seatData', demo.connections[0]);
+        console.log(demo.demoIsGoing);
+        socket.emit('isGoing', demo.demoIsGoing);
+    }
+
+    socket.on('signInDemo', function (name) {
+        console.log('signInDemo');
+        if (demoData.hasOwnProperty(name)) {
+            demo = demoData[name];
+            addSocket()
+        } else {
+            demoNotFound();
+        }
+    });
+
+    function addSocket() {
+        demo.addSocket(socket);
+        socket.emit('locationIndex', demo.locationAtTheMoment);
+        socket.emit('seatData', demo.connections[demo.locationAtTheMoment]);
+        socket.emit('isGoing', demo.demoIsGoing);
+        notificationGenerator();
+    }
+
+    function demoNotFound() {
+        socket.emit('demoNotFound');
+    }
+    /**
+     Disconnect
+     **/
+
+
+    socket.on('disconnect', function() {
+        console.log('disconnect');
+        if(demo !== undefined) {
+            demo.removeSocket(this);
+        }
+    })
+        /**
+     Notification
+     **/
+
+
+    function notificationGenerator() {
+
+        var i = 3;
+        var enabler = Math.floor((Math.random() * (i)));
+
+        while (enabler <= 1) {
+            i = i * i;
+            enabler = Math.floor((Math.random() * (i)));
+            console.log("timeout " + i);
+            var randomNotification = Math.floor((Math.random() * (notifications.length)));
+            var randomTimeOut = Math.floor((Math.random() * (timeoutArray.length)));
+            setTimeout(function () {
+                socket.emit('newNotification', notifications[randomNotification]);
+                demo.broadcast('newNotification', socket, notifications[randomNotification])
+            }, timeoutArray[randomTimeOut]);
+        }
+    }
+
+
+    socket.on('nextConnection', function () {
+        console.log("seuraava");
+        demo.nextLocation();
+        next();
+    });
+
+    socket.on('seatBought', function (data) {
+        console.log("seatBought");
+        if (data.start === locations[demo.locationAtTheMoment]) {
+            demo.connections[demo.locationAtTheMoment][data.id] = data;
+            seatBought(data.id);
+        } else {
+            var index = locationMap[data.start];
+            if (demo.locationAtTheMoment < index) {
+                conncetions[index][data.id] = data
+            }
+        }
+    });
+
+    socket.on('isGoing', function (bool) {
+        console.log('isGoing');
+        console.log(bool);
+        if (bool) {
+            demo.demoIsGoing = bool;
+            demoLaunch();
+        }
+    });
+
+    socket.on('newData', function () {
+        console.log('newData');
+        socket.emit('locationIndex', demo.locationAtTheMoment);
+        socket.emit('seatData', demo.connections[demo.locationAtTheMoment]);
+    });
+
+    function seatBought(seatId) {
+        console.log(seatId);
+        demo.broadcast('seatBought', socket, demo.connections[demo.locationAtTheMoment][seatId]);
+        //console.log(demo.connections[demo.locationAtTheMoment][seatId]);
+    }
+
+    function demoHasEnded() {
+        console.log("Demo has ended");
+        demo.demoIsGoing = false;
+        demo.locationAtTheMoment = 0;
+        demo.demoIsGoing = false;
+        demo.broadcast('isGoing', socket, demo.demoIsGoing);
+        generateData();
+    }
+
+    function demoLaunch() {
+        console.log('Demolaunch');
+        demo.broadcast('isGoing', socket, demo.demoIsGoing);
+    }
+
+    function next() {
+        if (demo.demoIsGoing && demo.locationAtTheMoment < (locations.length - 1)) {
+            socket.emit('seatData', demo.connections[demo.locationAtTheMoment]);
+            demo.broadcast('nextConnection', socket, demo.connections[demo.locationAtTheMoment]);
+            console.log("seatData and nextConnection emitted");
+            notificationGenerator();
+        } else {
+            demoHasEnded()
+        }
+    }
+
+});
+
+
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+    var port = parseInt(val, 10);
+
+    if (isNaN(port)) {
+        // named pipe
+        return val;
+    }
+
+    if (port >= 0) {
+        // port number
+        return port;
+    }
+
+    return false;
+}
+
+/**
+ * Event listener for HTTP server "error" event.
+ */
+
+function onError(error) {
+    if (error.syscall !== 'listen') {
+        throw error;
+    }
+
+    var bind = typeof port === 'string'
+        ? 'Pipe ' + port
+        : 'Port ' + port;
+
+    // handle specific listen errors with friendly messages
+    switch (error.code) {
+        case 'EACCES':
+            console.error(bind + ' requires elevated privileges');
+            process.exit(1);
+            break;
+        case 'EADDRINUSE':
+            console.error(bind + ' is already in use');
+            process.exit(1);
+            break;
+        default:
+            throw error;
+    }
+}
+
+/**
+ * Event listener for HTTP server "listening" event.
+ */
+
+function onListening() {
+    var addr = server.address();
+    var bind = typeof addr === 'string'
+        ? 'pipe ' + addr
+        : 'port ' + addr.port;
+    debug('Listening on ' + bind);
+}
+
+
+
+
+

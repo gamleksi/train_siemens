@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en" ng-app='train'>
+<head>
+    <meta charset="utf-8">
+    <title>Virtual Conductor</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="stylesheet" href="stylesheets/css/main.css">
+</head>
+<body ng-controller="SeatsController as seats">
+
+
+<!- Header -->
+
+<div id="menu" ng-show="seats.booleanCarriages[0]">
+    <div class="menuscreen"></div>
+    <div class="display" ng-if="!seats.nameSentAndApproved">
+        <h1>Virtuaali konduktööri</h1>
+
+
+        <form ng-hide="seats.nameSent">
+            <a> <h2 class="start" ng-hide="seats.loadingMenu()">Demon nimi: <input type="text" ng-model="seats.demoName">
+            </h2>
+            </a>
+            <div class="form-section">
+                <input type="radio" ng-model="seats.newDemo" value="true">
+                <h2> Uusi demo </h2>
+            </div>
+            <div class="form-section">
+                <input type="radio" ng-model="seats.newDemo" value="false">
+                <h2> Jatka Demoa </h2>
+            </div>
+            <i class="fa fa-play-circle-o fa-2x" ng-show="seats.demoName && seats.newDemo !== undefined" ng-click="seats.startDemo()"></i>
+        </form>
+
+        <a href="#" ng-show="seats.nameSent"><h2 class="start"> Ladataan... </h2></a>
+    </div>
+    <div class="display" ng-if="seats.nameSentAndApproved">
+        <h1>Virtuaali konduktööri</h1>
+        <a href="#"><h2 class="start" ng-hide="seats.dataHasGenerated"> Ladataan... </h2></a>
+        <a href="#"><h2 class="start" ng-show="seats.dataHasGenerated && !seats.demoIsGoing" ng-click="seats.launchDemo()"> Aloita <i
+                class="fa fa-train"></i></h2></a>
+        <a href="#" ng-show="seats.canContinue()"><h2 class="continue" ng-click="seats.moveDown(0)"> Jatka demoa <i
+                class="fa fa-play"></i></h2></a>
+    </div>
+</div>
+
+
+
+<!-- Nav -->
+<div id="navPanel" >
+    <nav>
+        <a class="link depth-0" href="#navPanel" ng-click="seats.tasksHasBeenClicked=false"><span
+                class="indent-0"></span>Takaisin</a>
+
+        <div ng-repeat="carriage in seats.carriageArray track by $index" ng-init="index=$index"
+             ng-show="seats.booleanCarriages[index + 1]">
+            <a class="link depth-0"><span class="indent-0"></span>Vaunu {{index+1}}</a>
+            <a class="link depth-1"><span class="indent-1"></span>Paikkoja yhteensä
+                {{seats.carriageArray[index].seats.length}}</a>
+            <a class="link depth-1"><span class="indent-1"></span>Vapaita {{seats.emptySeats(index +1)}}</a>
+            <a class="link depth-1" ng-show="seats.carriageHasTasks(index+1)"
+               ng-click="seats.tasksHasBeenClicked=!seats.tasksHasBeenClicked"><span
+                    class="indent-1"></span>Tehtävät</a>
+
+            <div id="task" ng-repeat="taskId in seats.tasks(index+1)" ng-show="seats.tasksHasBeenClicked">
+                <a class="link depth-2"><span class="indent-2"></span>{{seats.seats[taskId].number}}:
+                    {{seats.seats[taskId].description}}</a>
+            </div>
+            <a class="link depth-1" ng-click="seats.summaryHasBeenClicked=!seats.summaryHasBeenClicked"><span
+                    class="indent-1"></span>Tee yhteenveto vaunusta</a>
+
+            <div ng-show="seats.summaryHasBeenClicked">
+                <div id="summary" ng-repeat="summary in seats.carriageArray[index].summaries"
+                     ng-click="summary[sent]=true" ng-hide="summary[sent]">
+                    <a class="link depth-2"><span class="indent-2"></span>{{summary.description}}</a>
+                    <i class="fa fa-angle-right"></i>
+                </div>
+            </div>
+
+        </div>
+        <div ng-show="seats.dataHasGenerated">
+            <a class="link depth-0" href="#navPanel" ng-click="seats.changeLocation()"><span class="indent-0"></span>Seuraava
+                Yhteys</a>
+        </div>
+
+    </nav>
+</div>
+
+
+<div id="titleBar" ng-hide="seats.booleanCarriages[0]">
+    <a href="#navPanel" ng-click="seats.closeFooter()" class="toggle" ng-click="seats.taskHasBeenClicked=false"></a>
+    <span class="title" ng-hide="seats.pageIndex == 0">Vaunu {{seats.pageIndex}}</span>
+    <img href="#" class="siemens" ng-src="{{seats.image[2]}}"/>
+</div>
+
+
+<div id="notification-wrapper" ng-hide="seats.pageIndex == 0" x>
+    <div class="notification-panel" ng-repeat="notification in seats.notificationDescriptions"
+         ng-show="notification.visible" ng-click="notification.visible=false">
+        <p> {{notification.description}}</p>
+    </div>
+</div>
+
+
+<div class="container" if="">
+    <!-- Train -->
+
+
+    <!-- Carriage 1 -->
+    <div class='carriage-wrapper' ng-repeat="carriage in seats.carriageArray track by $index"
+         ng-init="carriageIndex=$index" id="{{carriage.id}}" ng-show="seats.booleanCarriages[carriageIndex + 1]">
+
+        <img class="carriage {{carriage.id}}" ng-src="{{seats.carriagesImages[carriageIndex]}}"/>
+
+        <div class="icon-wrapper-up" ng-click="seats.moveUp(carriageIndex + 1)">
+            <i class="fa fa-caret-up fa-5x"></i></div>
+        <div href="#" class="icon-wrapper-down" ng-if="seats.nextCarriage(carriageIndex)"
+             ng-click="seats.moveDown(carriageIndex + 1)"><i class="fa fa-caret-down fa-5x"></i></div>
+
+        <div ng-repeat="part in carriage.parts">
+
+            <div ng-repeat="row in part.size track by $index" ng-init="rowId=$index"
+                 class="seat-section {{part.id}} r{{rowId +1}}">
+
+                <div ng-repeat="seat in part.row"
+                     ng-init="seatId=seats.generateSeatData(carriage.id, part.id, rowId, seat)"
+                     ng-click="seats.seatSelect(carriage.id, part.id, rowId, seat)" class="seat {{seat}}">
+                    <img ng-src="{{seats.image[0]}}" ng-show="seats.isBooked(carriage.id, part.id, rowId, seat)"/>
+                    <img ng-src="{{seats.image[1]}}" ng-hide="seats.isBooked(carriage.id, part.id, rowId, seat)">
+
+                    <p>{{ seats.seats[seatId].number }}</p>
+                    <i class="fa fa-star" ng-show="seats.hasTask(seatId)"></i>
+                    <i class="fa fa-ticket" ng-show="seats.isValid(seatId)"></i>
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="train" ng-hide="seats.booleanCarriages[0]">
+        <div class='train-wrapper' ng-repeat="carriage in seats.carriageArray track by $index"
+             ng-init="carriageIndex=$index" id="{{carriage.id}}" ng-click="seats.carriageSelected(carriageIndex + 1)">
+
+            <img class="{{carriage.id}}" class="carriage"
+                 ng-class="{'selected-carriage': seats.booleanCarriages[carriageIndex + 1]}"
+                 ng-src="{{seats.carriagesImages[carriageIndex]}}"/>
+
+            <div ng-repeat="part in carriage.parts">
+
+                <div ng-repeat="row in part.size track by $index" ng-init="rowId=$index"
+                     class="seat-section {{part.id}} r{{rowId +1}}">
+
+                    <div ng-repeat="seat in part.row" class="seat {{seat}}">
+                        <svg width="100%" height="2%" ng-show="seats.isBooked(carriage.id, part.id, rowId, seat)">
+                            <rect width="100%" height="2%" style="fill:red;"/>
+                        </svg>
+                        <svg width="100%" height="2%" ng-hide="seats.isBooked(carriage.id, part.id, rowId, seat)">
+                            <rect width="100%" height="2%" style="fill:green;"/>
+                        </svg>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    </div>
+
+</div>
+
+
+<div ng-if="seats.nameSentAndApproved" ng-hide="seats.booleanCarriages[0]">
+
+    <footer class="footer" ng-show="seats.isSelected" class="container">
+
+        <!-- About -->
+        <h2 class="major"><span>Paikkatieto: Vaunu {{seats.pageIndex}} Istuin {{seats.selectedSeat.number}}</span></h2>
+
+        <h1 class="major"><span></span></h1>
+
+        <div class="row" ng-hide="seats.selectedSeatIsEmpty()">
+            <div class="12u">
+                <ul>
+                    <li class="footer-row"><a ng-hide="seats.selectedSeat.name" class="button">Paikka on ostettu</a></li>
+                    <li class="footer-row"><a ng-show="seats.selectedSeat.name" class="button">Matkustajan nimi:
+                        {{seats.selectedSeat.name}}</a></li>
+                    <li class="footer-row"><a class="button">Matka: {{seats.selectedSeat.start}} - {{seats.selectedSeat.end}}</a></li>
+                    <li class="footer-row"><a ng-show="seats.selectedSeat.description" class="button">Muuta:
+                        {{seats.selectedSeat.description}}</a></li>
+                    <li class="footer-row"><a class="button alt" ng-click="seats.closeFooter()">Palaa takaisin</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="row" ng-show="seats.selectedSeatIsEmpty()">
+            <div class="12u">
+                <ul class="actions">
+                    <li class="footer-row" ng-hide="seats.nextIsDefined()"><a class="button">Paikka on vapaa</a></li>
+                    <li class="footer-row" ng-show="seats.nextIsDefined()"><a class="button">Seuraava varaus:
+                        {{seats.selectedSeat.next}}</a></li>
+                    <li class="footer-row">
+                        <a class="button">
+                            Kohde
+                        </a>
+                    <li class="footer-row">
+                        <select  ng-model="model.id" class="button option">
+                            <option ng-repeat="location in seats.canTravel()"><a>{{location}}</a></option>
+                        </select>
+                    </li>
+                    </li>
+                    <li class="footer-row"><a class="button center" ng-click="seats.buySeat(model.id)">Osta paikka</a></li>
+                    <li class="footer-row"><a class="button alt" ng-click="seats.closeFooter()">Palaa takaisin</a></li>
+                </ul>
+            </div>
+        </div>
+
+    </footer>
+
+
+    <footer class="footer" ng-hide="seats.isSelected" class="container">
+        <div ng-hide="seats.searchButtonIsClicked">
+            <i ng-click="seats.searchClicked()" class="fa fa-search"></i>
+
+            <span class="title">{{seats.travelSection}} </span>
+
+        </div>
+        <div ng-show="seats.searchButtonIsClicked">
+            <h2 class="major"><span>Etsi vapaa paikka vaunusta</span></h2>
+            <ul class="actions">
+
+                <li class="footer-row">
+                    <a class="button select">
+                        Kohde:
+                    </a>
+                    <select class="button select option" ng-model="model.loc">
+                        <option ng-repeat="location in seats.canTravel(true)">{{location}}</option>
+                    </select>
+                </li>
+                <li class="footer-row"><a class="button center" ng-click="seats.showFreeSeatsFromCarriage(model.loc)">Etsi <i
+                        class="fa fa-search"></i> </a></li>
+                <li class="footer-row"><a class="button center alt" ng-click="seats.searchClicked()">Palaa Takaisin</a></li>
+            </ul>
+        </div>
+    </footer>
+</div>
+
+<script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular.min.js"></script>
+<script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular-resource.js"></script>
+<script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular-route.js"></script>
+<script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.3.14/angular-animate.js"></script>
+<script type="text/javascript" src="main.js"></script>
+<script src="javascripts/jquery.min.js"></script>
+<script src="javascripts/jquery.js"></script>
+<script src="javascripts/jquery.dropotron.min.js"></script>
+<script src="javascripts/skel.min.js"></script>
+<script src="javascripts/skel-viewport.min.js"></script>
+<script src="javascripts/util.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+
+
+</body>
+</html>
